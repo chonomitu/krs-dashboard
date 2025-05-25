@@ -4,47 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kyrson Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js">    async function fetchKRSBalance(address) {
-      try {
-        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
-        const rawBalance = await contract.balanceOf(address);
-        const decimals = await contract.decimals();
-        const balance = ethers.utils.formatUnits(rawBalance, decimals);
-        document.getElementById("balanceBox").style.display = "block";
-        document.getElementById("krsBalance").textContent = parseFloat(balance).toFixed(2);
-      } catch (err) {
-        console.error("Nie udało się pobrać salda KRS:", err);
-      }
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  $1
+<script>
+  async function fetchKRSBalance(address) {
+    try {
+      const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
+      const rawBalance = await contract.balanceOf(address);
+      const decimals = await contract.decimals();
+      const balance = ethers.utils.formatUnits(rawBalance, decimals);
+      document.getElementById("balanceBox").style.display = "block";
+      document.getElementById("krsBalance").textContent = parseFloat(balance).toFixed(2);
+    } catch (err) {
+      console.error("Nie udało się pobrać salda KRS:", err);
     }
-
-      async function fetchKRSPool() {
-      try {
-        const provider = new ethers.providers.JsonRpcProvider("https://arb-mainnet.g.alchemy.com/v2/Nj4G5fjazRLiSREiRTES8oG5b3HMznyx");
-        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
-
-        // USDC/KRS pool
-        const usdcPoolAddress = "0xca71156bFe3bBecb281B78BF8bd9C083D1db222b";
-        const rawBalanceUSDC = await contract.balanceOf(usdcPoolAddress);
-        const decimals = await contract.decimals();
-        const balanceUSDC = ethers.utils.formatUnits(rawBalanceUSDC, decimals);
-
-        // WETH/KRS pool
-        const wethPoolAddress = "0x4F4F6a4f5A28420B57A49Fe5cc935b441BB52456";
-        const rawBalanceWETH = await contract.balanceOf(wethPoolAddress);
-        const balanceWETH = ethers.utils.formatUnits(rawBalanceWETH, decimals);
-
-        document.getElementById("poolBox").style.display = "block";
-        document.getElementById("krsPool").textContent = `${parseFloat(balanceUSDC).toFixed(2)} (USDC) + ${parseFloat(balanceWETH).toFixed(2)} (WETH)`;
-      } catch (err) {
-        console.error("Nie udało się pobrać ilości KRS w pulach:", err);
-      }
-      } catch (err) {
-        console.error("Nie udało się pobrać ilości KRS w puli:", err);
-      }
-    }
-
-  </script>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  }
+</script>
   <style>
     body {
       font-family: Arial, sans-serif;
