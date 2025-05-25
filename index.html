@@ -24,14 +24,15 @@
       color: #aaa;
     }
     .box {
-      width: 300px;
+      width: 320px;
       background-color: #1e1e1e;
       border: 1px solid #333;
       border-radius: 10px;
       padding: 1.5rem;
       margin-bottom: 1.2rem;
       text-align: center;
-      font-size: 1.3rem;
+      font-size: 1.2rem;
+      overflow-wrap: break-word;
     }
     .button-wrapper {
       margin-top: 1.5rem;
@@ -53,7 +54,7 @@
       font-size: 1rem;
       color: #ccc;
     }
-    input {
+    input, select {
       padding: 0.5rem;
       margin-top: 1rem;
       width: 280px;
@@ -61,6 +62,13 @@
       border: 1px solid #666;
       background-color: #222;
       color: #eee;
+    }
+    .blink {
+      animation: blinkAnim 2s infinite;
+    }
+    @keyframes blinkAnim {
+      0%, 100% { color: #000; }
+      50% { color: red; }
     }
   </style>
 </head>
@@ -81,99 +89,28 @@
   <div class="box" id="buyBox" style="display:none;">
     Kup Kyrsony<br>
     <input type="number" id="amountToBuy" placeholder="Podaj ilość KRS" />
+    <select id="currencySelect">
+      <option value="ETH">ETH</option>
+      <option value="USDC">USDC</option>
+    </select>
     <br><br>
     <button onclick="buyKRS()">🛒 Kup teraz</button>
     <p id="buyStatus"></p>
   </div>
 
+  <div class="box">
+    <p><strong class="blink">Sieć: Arbitrum One</strong></p>
+    <p><strong>Kontrakt KRS:</strong><br><code id="krsAddress">0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070</code></p>
+    <button onclick="copyKRSAddress()">📋 Kopiuj adres</button>
+    <br><br>
+    <button onclick="addTokenToWallet()">➕ Dodaj KRS do portfela</button>
+  </div>
+
   <script>
-    const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
-    const ABI = [{"constant":true,"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}, {"inputs":[],"name":"buy","outputs":[],"stateMutability":"payable","type":"function"}];
-
-    let provider, signer, userAddress;
-
-    async function fetchKursy() {
-      let kursKrsWeth = 0;
-      let kursKrsUsdc = 0;
-      let kursEthZKrs = 0;
-      let kursEthZCoingecko = 0;
-      let usdToPln = 0;
-
-      try {
-        const res = await fetch('https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json');
-        const data = await res.json();
-        kursKrsWeth = data.WETH;
-        kursKrsUsdc = data.USDC;
-        document.getElementById("WETH").textContent = `${kursKrsWeth?.toFixed(6) || '-'}` + " PLN";
-        document.getElementById("USDC").textContent = `${kursKrsUsdc?.toFixed(6) || '-'}` + " USD";
-      } catch (e) {
-        console.error("Błąd ładowania kursów:", e);
-      }
-
-      try {
-        const ethRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln');
-        const ethData = await ethRes.json();
-        kursEthZCoingecko = ethData.ethereum?.pln;
-        usdToPln = ethData.usd?.pln;
-        document.getElementById("ETHREAL").textContent = kursEthZCoingecko.toFixed(2) + " PLN";
-      } catch (e) {
-        console.error("Błąd pobierania kursu ETH/USD/PLN z CoinGecko:", e);
-      }
-
-      if (kursKrsUsdc > 0 && kursKrsWeth > 0 && kursEthZCoingecko > 0 && usdToPln > 0) {
-        kursEthZKrs = (kursKrsUsdc * usdToPln) / kursKrsWeth;
-        document.getElementById("ETHPLN").textContent = "~" + kursEthZKrs.toFixed(2) + " PLN";
-
-        const diff = Math.abs(kursEthZKrs - kursEthZCoingecko) / kursEthZCoingecko;
-        if (diff > 0.05) {
-          document.getElementById("alertBox").style.display = "block";
-        } else {
-          document.getElementById("alertBox").style.display = "none";
-        }
-      }
+    function copyKRSAddress() {
+      const text = document.getElementById("krsAddress").textContent;
+      navigator.clipboard.writeText(text).then(() => alert("Skopiowano adres kontraktu!"));
     }
-
-    async function connectWallet() {
-      if (typeof window.ethereum !== 'undefined') {
-        try {
-          provider = new ethers.providers.Web3Provider(window.ethereum);
-          await provider.send("eth_requestAccounts", []);
-          signer = provider.getSigner();
-          userAddress = await signer.getAddress();
-          document.getElementById('wallet-address').textContent = `Połączono: ${userAddress}`;
-          document.getElementById('buyBox').style.display = "block";
-        } catch (err) {
-          console.error("Błąd podczas łączenia z portfelem:", err);
-          alert("Połączenie odrzucone");
-        }
-      } else {
-        alert("MetaMask nie jest zainstalowany!");
-      }
-    }
-
-    async function buyKRS() {
-      try {
-        const amount = parseFloat(document.getElementById("amountToBuy").value);
-        if (isNaN(amount) || amount <= 0) return alert("Podaj poprawną ilość KRS");
-
-        const contract = new ethers.Contract(KRS_CONTRACT, ABI, signer);
-        const ethToSend = ethers.utils.parseEther((amount * 0.0001).toFixed(6));
-
-        const tx = await signer.sendTransaction({
-          to: KRS_CONTRACT,
-          value: ethToSend
-        });
-
-        document.getElementById("buyStatus").textContent = "⏳ Oczekiwanie na potwierdzenie...";
-        await tx.wait();
-        document.getElementById("buyStatus").textContent = "✅ Transakcja zakończona!";
-      } catch (e) {
-        console.error("Błąd kupna:", e);
-        document.getElementById("buyStatus").textContent = "❌ Nie udało się kupić KRS";
-      }
-    }
-
-    fetchKursy();
   </script>
 </body>
 </html>
