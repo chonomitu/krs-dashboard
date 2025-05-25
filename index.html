@@ -4,7 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kyrson Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js">    async function fetchKRSBalance(address) {
+      try {
+        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
+        const rawBalance = await contract.balanceOf(address);
+        const decimals = await contract.decimals();
+        const balance = ethers.utils.formatUnits(rawBalance, decimals);
+        document.getElementById("balanceBox").style.display = "block";
+        document.getElementById("krsBalance").textContent = parseFloat(balance).toFixed(2);
+      } catch (err) {
+        console.error("Nie udało się pobrać salda KRS:", err);
+      }
+    }
+
+      async function fetchKRSPool() {
+      try {
+        const provider = new ethers.providers.JsonRpcProvider("https://arb-mainnet.g.alchemy.com/v2/Nj4G5fjazRLiSREiRTES8oG5b3HMznyx");
+        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
+
+        // USDC/KRS pool
+        const usdcPoolAddress = "0xca71156bFe3bBecb281B78BF8bd9C083D1db222b";
+        const rawBalanceUSDC = await contract.balanceOf(usdcPoolAddress);
+        const decimals = await contract.decimals();
+        const balanceUSDC = ethers.utils.formatUnits(rawBalanceUSDC, decimals);
+
+        // WETH/KRS pool
+        const wethPoolAddress = "0x4F4F6a4f5A28420B57A49Fe5cc935b441BB52456";
+        const rawBalanceWETH = await contract.balanceOf(wethPoolAddress);
+        const balanceWETH = ethers.utils.formatUnits(rawBalanceWETH, decimals);
+
+        document.getElementById("poolBox").style.display = "block";
+        document.getElementById("krsPool").textContent = `${parseFloat(balanceUSDC).toFixed(2)} (USDC) + ${parseFloat(balanceWETH).toFixed(2)} (WETH)`;
+      } catch (err) {
+        console.error("Nie udało się pobrać ilości KRS w pulach:", err);
+      }
+      } catch (err) {
+        console.error("Nie udało się pobrać ilości KRS w puli:", err);
+      }
+    }
+
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     body {
@@ -49,10 +88,7 @@
     button:hover {
       background-color: #0052cc;
     }
-    #wallet-address {
-      margin-top: 0.8rem;
-      font-size: 1rem;
-      color: #ccc;
+    #wallet-address { font-size: 1rem; color: #0f0;
     }
     input, select {
       padding: 0.5rem;
@@ -97,7 +133,14 @@
     <button onclick="buyKRS()">🛒 Kup teraz</button>
     <p id="buyStatus"></p>
   </div>
-
+  <div class="box" id="poolBox" style="display:none;">
+    Tokeny KRS w puli:<br>
+    <strong><span id="krsPool">-</span> KRS</strong>
+  </div>
+  <div class="box" id="balanceBox" style="display:none;">
+    Saldo KRS w portfelu:<br>
+    <strong><span id="krsBalance">-</span> KRS</strong>
+  </div>
   <div class="box">
     <p><strong class="blink">Sieć: Arbitrum One</strong></p>
     <p><strong>Kontrakt KRS:</strong><br><code id="krsAddress">0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070</code></p>
@@ -127,6 +170,7 @@
 
         document.getElementById("wallet-address").textContent = `Połączono: ${address}`;
         document.getElementById("buyBox").style.display = "block";
+        fetchKRSBalance(address);
       } catch (err) {
         alert("Nie udało się połączyć z portfelem: " + err.message);
         console.error(err);
@@ -202,7 +246,10 @@
       }
     }
 
-    window.addEventListener("DOMContentLoaded", fetchKursy);
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchKursy();
+      fetchKRSPool();
+    });
   </script>
 </body>
 </html>
