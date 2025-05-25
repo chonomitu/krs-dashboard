@@ -1,108 +1,179 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kurs Kyrson (KRS)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kyrson Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #111;
+      background-color: #0e0e0e;
       color: #eee;
+      margin: 0;
       padding: 2rem;
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-    .box {
-      border: 1px solid #444;
-      padding: 1rem;
-      border-radius: 10px;
-      margin: 1rem auto;
-      max-width: 500px;
-      background-color: #1e1e1e;
-    }
-    .label {
-      font-size: 1.2rem;
+    h1 {
+      font-size: 2.2rem;
+      font-weight: bold;
+      margin-bottom: 2rem;
       color: #aaa;
     }
-    .value {
-      font-size: 2rem;
-      font-weight: bold;
-      margin-top: 0.3rem;
+    .box {
+      width: 300px;
+      background-color: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.2rem;
+      text-align: center;
+      font-size: 1.3rem;
     }
-    .button {
-      margin-top: 2rem;
+    .button-wrapper {
+      margin-top: 1.5rem;
     }
     button {
-      padding: 0.6rem 1.2rem;
-      font-size: 1rem;
-      background-color: #0f62fe;
-      color: white;
+      padding: 0.8rem 1.2rem;
+      background-color: #006aff;
+      color: #fff;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
+      font-weight: bold;
       cursor: pointer;
     }
     button:hover {
-      background-color: #0353e9;
+      background-color: #0052cc;
+    }
+    #wallet-address {
+      margin-top: 0.8rem;
+      font-size: 1rem;
+      color: #ccc;
+    }
+    input {
+      padding: 0.5rem;
+      margin-top: 1rem;
+      width: 280px;
+      border-radius: 6px;
+      border: 1px solid #666;
+      background-color: #222;
+      color: #eee;
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@metamask/detect-provider/dist/detect-provider.min.js"></script>
 </head>
 <body>
   <h1>Kurs Kyrson (KRS)</h1>
 
-  <div class="box">
-    <div class="label">KRS / ETH</div>
-    <div class="value" id="krsEth">...</div>
-  </div>
+  <div class="box">KRS / ETH<br><strong><span id="WETH">-</span></strong></div>
+  <div class="box">KRS / USDC<br><strong><span id="USDC">-</span></strong></div>
+  <div class="box">ETH w PLN (na podstawie KRS)<br><strong><span id="ETHPLN">-</span></strong></div>
+  <div class="box">ETH kurs rynkowy<br><strong><span id="ETHREAL">-</span></strong></div>
+  <div class="box" id="alertBox" style="display:none; background-color:#402020; color:#ffaaaa;">⚠️ Różnica kursów przekracza 5%</div>
 
-  <div class="box">
-    <div class="label">KRS / USDC</div>
-    <div class="value" id="krsUsdc">...</div>
-  </div>
-
-  <div class="box">
-    <div class="label">ETH w PLN</div>
-    <div class="value" id="ethPln">...</div>
-  </div>
-
-  <div class="button">
+  <div class="button-wrapper">
     <button onclick="connectWallet()">🔗 Połącz portfel</button>
-    <div id="walletAddress" style="margin-top: 1rem; color: #0f0;"></div>
+    <p id="wallet-address">Nie połączono</p>
+  </div>
+
+  <div class="box" id="buyBox" style="display:none;">
+    Kup Kyrsony<br>
+    <input type="number" id="amountToBuy" placeholder="Podaj ilość KRS" />
+    <br><br>
+    <button onclick="buyKRS()">🛒 Kup teraz</button>
+    <p id="buyStatus"></p>
   </div>
 
   <script>
-    async function fetchKurs() {
+    const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
+    const ABI = [{"constant":true,"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}, {"inputs":[],"name":"buy","outputs":[],"stateMutability":"payable","type":"function"}];
+
+    let provider, signer, userAddress;
+
+    async function fetchKursy() {
+      let kursKrsWeth = 0;
+      let kursKrsUsdc = 0;
+      let kursEthZKrs = 0;
+      let kursEthZCoingecko = 0;
+      let usdToPln = 0;
+
       try {
         const res = await fetch('https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json');
         const data = await res.json();
-        document.getElementById('krsEth').textContent = `${data.krs_eth_pln.toFixed(2)} PLN`;
-        document.getElementById('krsUsdc').textContent = `${data.krs_usdc_pln.toFixed(2)} PLN`;
-        document.getElementById('ethPln').textContent = `${data.eth_pln.toFixed(2)} PLN`;
-      } catch (err) {
-        document.getElementById('krsEth').textContent = '-';
-        document.getElementById('krsUsdc').textContent = '-';
-        document.getElementById('ethPln').textContent = '-';
-        console.error('Błąd pobierania kursu:', err);
+        kursKrsWeth = data.WETH;
+        kursKrsUsdc = data.USDC;
+        document.getElementById("WETH").textContent = `${kursKrsWeth?.toFixed(6) || '-'}` + " PLN";
+        document.getElementById("USDC").textContent = `${kursKrsUsdc?.toFixed(6) || '-'}` + " USD";
+      } catch (e) {
+        console.error("Błąd ładowania kursów:", e);
+      }
+
+      try {
+        const ethRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln');
+        const ethData = await ethRes.json();
+        kursEthZCoingecko = ethData.ethereum?.pln;
+        usdToPln = ethData.usd?.pln;
+        document.getElementById("ETHREAL").textContent = kursEthZCoingecko.toFixed(2) + " PLN";
+      } catch (e) {
+        console.error("Błąd pobierania kursu ETH/USD/PLN z CoinGecko:", e);
+      }
+
+      if (kursKrsUsdc > 0 && kursKrsWeth > 0 && kursEthZCoingecko > 0 && usdToPln > 0) {
+        kursEthZKrs = (kursKrsUsdc * usdToPln) / kursKrsWeth;
+        document.getElementById("ETHPLN").textContent = "~" + kursEthZKrs.toFixed(2) + " PLN";
+
+        const diff = Math.abs(kursEthZKrs - kursEthZCoingecko) / kursEthZCoingecko;
+        if (diff > 0.05) {
+          document.getElementById("alertBox").style.display = "block";
+        } else {
+          document.getElementById("alertBox").style.display = "none";
+        }
       }
     }
 
     async function connectWallet() {
-      const provider = await detectEthereumProvider();
-      if (provider) {
+      if (typeof window.ethereum !== 'undefined') {
         try {
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          document.getElementById('walletAddress').textContent = `Połączono: ${accounts[0]}`;
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          await provider.send("eth_requestAccounts", []);
+          signer = provider.getSigner();
+          userAddress = await signer.getAddress();
+          document.getElementById('wallet-address').textContent = `Połączono: ${userAddress}`;
+          document.getElementById('buyBox').style.display = "block";
         } catch (err) {
-          console.error('Nie udało się połączyć portfela', err);
+          console.error("Błąd podczas łączenia z portfelem:", err);
+          alert("Połączenie odrzucone");
         }
       } else {
-        alert('Zainstaluj MetaMask, aby połączyć portfel.');
+        alert("MetaMask nie jest zainstalowany!");
       }
     }
 
-    fetchKurs();
-    setInterval(fetchKurs, 30000);
+    async function buyKRS() {
+      try {
+        const amount = parseFloat(document.getElementById("amountToBuy").value);
+        if (isNaN(amount) || amount <= 0) return alert("Podaj poprawną ilość KRS");
+
+        const contract = new ethers.Contract(KRS_CONTRACT, ABI, signer);
+        const ethToSend = ethers.utils.parseEther((amount * 0.0001).toFixed(6));
+
+        const tx = await signer.sendTransaction({
+          to: KRS_CONTRACT,
+          value: ethToSend
+        });
+
+        document.getElementById("buyStatus").textContent = "⏳ Oczekiwanie na potwierdzenie...";
+        await tx.wait();
+        document.getElementById("buyStatus").textContent = "✅ Transakcja zakończona!";
+      } catch (e) {
+        console.error("Błąd kupna:", e);
+        document.getElementById("buyStatus").textContent = "❌ Nie udało się kupić KRS";
+      }
+    }
+
+    fetchKursy();
   </script>
 </body>
 </html>
