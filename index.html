@@ -133,18 +133,30 @@
 
     async function fetchKursy() {
       try {
-        const res = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
-        const data = await res.json();
-        document.getElementById("WETH").textContent = `${parseFloat(data.WETH).toFixed(6)} PLN`;
-        document.getElementById("USDC").textContent = `${parseFloat(data.USDC).toFixed(6)} USD`;
+        const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
+        const kursData = await kursRes.json();
+        document.getElementById("WETH").textContent = `${parseFloat(kursData.WETH).toFixed(6)} PLN`;
+        document.getElementById("USDC").textContent = `${parseFloat(kursData.USDC).toFixed(6)} USD`;
+
+        const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln", { cache: "no-cache" });
+        const ethData = await ethRes.json();
+        const ethPln = ethData.ethereum?.pln;
+        const usdPln = ethData.usd?.pln || 4.0;
+        document.getElementById("ETHREAL").textContent = `${parseFloat(ethPln).toFixed(2)} PLN`;
+
+        const kursEthZKrs = (kursData.USDC * usdPln) / kursData.WETH;
+        document.getElementById("ETHPLN").textContent = `${kursEthZKrs.toFixed(2)} PLN`;
+
+        const diff = Math.abs(kursEthZKrs - ethPln) / ethPln;
+        if (diff > 0.05) {
+          document.getElementById("alertBox").style.display = "block";
+        } else {
+          document.getElementById("alertBox").style.display = "none";
+        }
       } catch (e) {
-        console.error("Błąd pobierania kursów:", e);
-        document.getElementById("WETH").textContent = "Błąd";
-        document.getElementById("USDC").textContent = "Błąd";
+        console.error("Błąd pobierania danych:", e);
       }
     }
-
-    // ...reszta kodu pozostaje bez zmian...
 
     function copyKRSAddress() {
       const text = document.getElementById("krsAddress").textContent;
