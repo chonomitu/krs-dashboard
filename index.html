@@ -129,7 +129,8 @@
     const ABI = [
       "function balanceOf(address owner) view returns (uint256)",
       "function decimals() view returns (uint8)",
-      "function approve(address spender, uint256 amount) returns (bool)"
+      "function approve(address spender, uint256 amount) returns (bool)",
+      "function buy() payable"
     ];
     const USDC_ADDRESS = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8";
 
@@ -161,7 +162,8 @@
 
         if (currency === "ETH") {
           const ethValue = ethers.utils.parseEther((amount * 0.0001).toString());
-          const tx = await signer.sendTransaction({ to: KRS_CONTRACT, value: ethValue });
+          const contract = new ethers.Contract(KRS_CONTRACT, ABI.concat(["function buy() payable"]), signer);
+          const tx = await contract.buy({ value: ethValue });
           document.getElementById("buyStatus").textContent = "⏳ Trwa przetwarzanie...";
           await tx.wait();
           document.getElementById("buyStatus").textContent = "✅ Zakup zakończony!";
