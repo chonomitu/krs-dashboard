@@ -115,12 +115,14 @@
     ];
     const USDC_ADDRESS = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8";
 
+    let provider, signer;
+
     async function connectWallet() {
       try {
         if (!window.ethereum) throw new Error("MetaMask nie jest zainstalowany.");
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
-        const signer = provider.getSigner();
+        signer = provider.getSigner();
         const address = await signer.getAddress();
 
         document.getElementById("wallet-address").textContent = `Połączono: ${address}`;
@@ -128,6 +130,28 @@
       } catch (err) {
         alert("Nie udało się połączyć z portfelem: " + err.message);
         console.error(err);
+      }
+    }
+
+    async function buyKRS() {
+      try {
+        const amount = parseFloat(document.getElementById("amountToBuy").value);
+        const currency = document.getElementById("currencySelect").value;
+
+        if (!signer || isNaN(amount) || amount <= 0) throw new Error("Nieprawidłowe dane lub brak połączenia z portfelem.");
+
+        if (currency === "ETH") {
+          const ethValue = ethers.utils.parseEther((amount * 0.0001).toString());
+          const tx = await signer.sendTransaction({ to: KRS_CONTRACT, value: ethValue });
+          document.getElementById("buyStatus").textContent = "⏳ Trwa przetwarzanie...";
+          await tx.wait();
+          document.getElementById("buyStatus").textContent = "✅ Zakup zakończony!";
+        } else {
+          alert("Obsługa USDC nie została jeszcze w pełni zaimplementowana.");
+        }
+      } catch (err) {
+        console.error("Błąd zakupu:", err);
+        document.getElementById("buyStatus").textContent = "❌ Błąd zakupu: " + err.message;
       }
     }
 
@@ -148,11 +172,7 @@
         document.getElementById("ETHPLN").textContent = `${kursEthZKrs.toFixed(2)} PLN`;
 
         const diff = Math.abs(kursEthZKrs - ethPln) / ethPln;
-        if (diff > 0.05) {
-          document.getElementById("alertBox").style.display = "block";
-        } else {
-          document.getElementById("alertBox").style.display = "none";
-        }
+        document.getElementById("alertBox").style.display = diff > 0.05 ? "block" : "none";
       } catch (e) {
         console.error("Błąd pobierania danych:", e);
         document.getElementById("ETHREAL").textContent = "Błąd";
