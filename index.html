@@ -99,9 +99,18 @@
     <p id="buyStatus"></p>
   </div>
   <div class="box" id="poolBox" style="display:none;">
-    Tokeny KRS w puli:<br>
-    <strong><span id="krsPool">-</span> KRS</strong>
-  </div>
+  <strong style="font-size: 1.3rem; color: #0cf;">Pula KRS / USDC</strong><br><br>
+  KRS: <strong><span id="krsPoolUSDC">-</span></strong><br>
+  USDC: <strong><span id="usdcPool">-</span></strong><br><br>
+  <strong style="font-size: 1.3rem; color: #fc0;">Pula KRS / ETH</strong><br><br>
+  KRS: <strong><span id="krsPoolWETH">-</span></strong><br>
+  ETH (WETH): <strong><span id="ethPool">-</span></strong><br>
+  <hr>
+  <strong>Wartość całkowita puli:</strong><br>
+  <span><strong><span id="poolValueUSD">-</span></strong> USD</span><br>
+  <span><strong><span id="poolValueETH">-</span></strong> ETH</span><br>
+  <span><strong><span id="poolValuePLN">-</span></strong> PLN</span>
+</div>
   <div class="box" id="balanceBox" style="display:none;">
     Saldo KRS w portfelu:<br>
     <strong><span id="krsBalance">-</span> KRS</strong>
@@ -115,7 +124,39 @@
   </div>
   <script>
     // Cały skrypt taki sam jak poprzednio, z zakomentowanym kodem kupna USDC w funkcji buyKRS()
-    const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
+    const DEBUG = false;
+
+async function fetchKRSPool() {
+  document.getElementById("poolBox").style.display = "block";
+  try {
+    const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
+    const kursData = await kursRes.json();
+
+    if (!kursData.pool) {
+      throw new Error("Brak danych o puli (pool) w kursy.json");
+    }
+
+    document.getElementById("krsPoolUSDC").textContent = parseFloat(kursData.pool.krs_usdc).toFixed(2);
+    document.getElementById("usdcPool").textContent = parseFloat(kursData.pool.usdc).toFixed(2);
+    document.getElementById("krsPoolWETH").textContent = parseFloat(kursData.pool.krs_weth).toFixed(2);
+    document.getElementById("ethPool").textContent = parseFloat(kursData.pool.weth).toFixed(4);
+    
+    
+
+    document.getElementById("poolValueUSD").textContent = parseFloat(kursData.pool.value_usd).toFixed(2);
+    document.getElementById("poolValueETH").textContent = parseFloat(kursData.pool.value_eth).toFixed(6);
+    document.getElementById("poolValuePLN").textContent = parseFloat(kursData.pool.value_pln).toFixed(2);
+
+    
+    
+  } catch (err) {
+    console.error("Nie udało się pobrać danych puli:", err);
+    document.getElementById("poolBox").innerHTML = "<span style='color:#f55;'>❌ Brak danych o puli w kursy.json</span>";
+    document.getElementById("poolBox").style.display = "block";
+  }
+}
+
+const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
     const USDC_ADDRESS = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8";
     const KRS_USDC_POOL_ADDRESS = "0xca71156bFe3bBecb281B78BF8bd9C083D1db222b";
     const UNISWAP_V3_POOL_ABI = [
@@ -275,96 +316,32 @@
     }
 
     async function fetchKursy() {
-      try {
-        const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
-        const kursData = await kursRes.json();
-        document.getElementById("WETH").textContent = `${parseFloat(kursData.WETH).toFixed(6)} PLN`;
-        document.getElementById("USDC").textContent = `${parseFloat(kursData.USDC).toFixed(6)} USD`;
+  try {
+    const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
+    const kursData = await kursRes.json();
 
-        const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln", { cache: "no-cache" });
-        const ethData = await ethRes.json();
-        const ethPln = ethData.ethereum?.pln;
-        const usdPln = ethData.usd?.pln || 4.0;
-        document.getElementById("ETHREAL").textContent = `${parseFloat(ethPln).toFixed(2)} PLN`;
+    document.getElementById("WETH").textContent = `${parseFloat(kursData.WETH).toFixed(6)} PLN`;
+    document.getElementById("USDC").textContent = `${parseFloat(kursData.USDC).toFixed(6)} USD`;
 
-        const kursEthZKrs = (kursData.USDC * usdPln) / kursData.WETH;
-        document.getElementById("ETHPLN").textContent = `${kursEthZKrs.toFixed(2)} PLN`;
+    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln", { cache: "no-cache" });
+    const ethData = await ethRes.json();
+    const ethPln = ethData.ethereum?.pln;
+    const usdPln = ethData.usd?.pln || 4.0;
+    document.getElementById("ETHREAL").textContent = `${parseFloat(ethPln).toFixed(2)} PLN`;
 
-        const diff = Math.abs(kursEthZKrs - ethPln) / ethPln;
-        document.getElementById("alertBox").style.display = diff > 0.05 ? "block" : "none";
-      } catch (e) {
-        console.error("Błąd pobierania danych:", e);
-        document.getElementById("ETHREAL").textContent = "Błąd";
-        document.getElementById("ETHPLN").textContent = "Błąd";
-      }
-    }
+    const kursEthZKrs = (kursData.USDC * usdPln) / kursData.WETH;
+    document.getElementById("ETHPLN").textContent = `${kursEthZKrs.toFixed(2)} PLN`;
 
-    async function fetchKRSPool() {
-      try {
-        const provider = new ethers.providers.JsonRpcProvider("https://arb-mainnet.g.alchemy.com/v2/Nj4G5fjazRLiSREiRTES8oG5b3HMznyx");
-        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
+    const diff = Math.abs(kursEthZKrs - ethPln) / ethPln;
+    document.getElementById("alertBox").style.display = diff > 0.05 ? "block" : "none";
+  } catch (e) {
+    console.error("Błąd pobierania danych:", e);
+    document.getElementById("ETHREAL").textContent = "Błąd";
+    document.getElementById("ETHPLN").textContent = "Błąd";
+  }
+}
 
-        const rawBalanceUSDC = await contract.balanceOf("0xca71156bFe3bBecb281B78BF8bd9C083D1db222b");
-        const rawBalanceWETH = await contract.balanceOf("0x4F4F6a4f5A28420B57A49Fe5cc935b441BB52456");
-        const decimals = await contract.decimals();
-
-        const balanceUSDC = ethers.utils.formatUnits(rawBalanceUSDC, decimals);
-        const balanceWETH = ethers.utils.formatUnits(rawBalanceWETH, decimals);
-
-        document.getElementById("poolBox").style.display = "block";
-        document.getElementById("krsPool").textContent = `${parseFloat(balanceUSDC).toFixed(2)} (USDC) + ${parseFloat(balanceWETH).toFixed(2)} (WETH)`;
-      } catch (err) {
-        console.error("Nie udało się pobrać ilości KRS w pulach:", err);
-      }
-    }
-
-    function copyKRSAddress() {
-      const text = document.getElementById("krsAddress").textContent;
-      navigator.clipboard.writeText(text).then(() => alert("Skopiowano adres kontraktu!"));
-    }
-
-    function addTokenToWallet() {
-      if (window.ethereum) {
-        window.ethereum.request({
-          method: "wallet_watchAsset",
-          params: {
-            type: "ERC20",
-            options: {
-              address: KRS_CONTRACT,
-              symbol: "KRS",
-              decimals: 18,
-              image: "https://example.com/krs.png"
-            }
-          }
-        });
-      }
-    }
-
-    function updateConversionPreview() {
-      const preview = document.getElementById("conversionPreview");
-      const costEstimate = document.getElementById("costEstimate");
-      const amount = parseFloat(document.getElementById("amountToBuy").value);
-      const currency = document.getElementById("currencySelect").value;
-
-      if (!isNaN(amount) && amount > 0) {
-        if (currency === "ETH") {
-          const ethNeeded = amount * 0.0001;
-          preview.textContent = `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS (1 KRS = 0.0001 ETH)`;
-          if (userEthBalance === 0) {
-            costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
-          } else if (userEthBalance < ethNeeded + 0.005) {
-            costEstimate.textContent = `⚠️ Za mało ETH. Potrzeba około ${(ethNeeded + 0.005).toFixed(6)} ETH (kupno + gas), masz ${userEthBalance.toFixed(6)} ETH`;
-          } else {
-            costEstimate.textContent = "";
-          }
-        }
-      } else {
-        preview.textContent = "";
-        costEstimate.textContent = "";
-      }
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", () => {
       fetchKursy();
       fetchKRSPool();
     });
