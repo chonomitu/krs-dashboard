@@ -5,6 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kyrson Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
+<script>
+function updateConversionPreview() {
+  const preview = document.getElementById("conversionPreview");
+  const costEstimate = document.getElementById("costEstimate");
+  const amount = parseFloat(document.getElementById("amountToBuy").value);
+  const currency = document.getElementById("currencySelect").value;
+  const ethToPln = parseFloat(document.getElementById("ETHREAL").textContent) || 0;
+
+  if (!isNaN(amount) && amount > 0) {
+    if (currency === "ETH") {
+      const ethNeeded = amount * 0.0001;
+      const costPLN = ethToPln > 0 ? (ethNeeded * ethToPln).toFixed(2) : "-";
+      preview.textContent = `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH (${costPLN} PLN) za ${amount} KRS (1 KRS = 0.0001 ETH)`;
+
+      if (userEthBalance === 0) {
+        costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
+      } else if (userEthBalance < ethNeeded + 0.005) {
+        costEstimate.textContent = `⚠️ Za mało ETH. Potrzeba około ${(ethNeeded + 0.005).toFixed(6)} ETH (kupno + gas), masz ${userEthBalance.toFixed(6)} ETH`;
+      } else {
+        costEstimate.textContent = "";
+      }
+    }
+  } else {
+    preview.textContent = "";
+    costEstimate.textContent = "";
+  }
+}
+</script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     body {
