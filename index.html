@@ -6,28 +6,63 @@
   <title>Kyrson Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
 <script>
+
+ 
+function fmt(n, frac=6, minFrac=0) {
+  if (n === null || n === undefined) return "-";
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "-";
+  if (Math.abs(num) > 1e12) return "-";
+  return num.toLocaleString("pl-PL", {
+    minimumFractionDigits: minFrac,
+    maximumFractionDigits: frac
+  });
+}
+
+function safeDiv(a, b) {
+  const x = Number(a), y = Number(b);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || y === 0) return NaN;
+  return x / y;
+}
+
+
+
+
 function updateConversionPreview() {
   const preview = document.getElementById("conversionPreview");
   const costEstimate = document.getElementById("costEstimate");
   const plnEstimate = document.getElementById("plnEstimate");
   const amount = parseFloat(document.getElementById("amountToBuy").value);
   const currency = document.getElementById("currencySelect").value;
-  const ethToPln = parseFloat(document.getElementById("ETHREAL").textContent) || 0;
+  const ethToPln = parseFloat(document.getElementById("ETHREAL").textContent) || 0; // OK: parseFloat utnie " PLN"
 
-  if (!isNaN(amount) && amount > 0) {
-    if (currency === "ETH") {
-      const ethNeeded = amount * 0.0001;
-      const costPLN = ethToPln > 0 ? (ethNeeded * ethToPln).toFixed(2) : "-";
-      preview.textContent = `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS (1 KRS = 0.0001 ETH)`;
-      plnEstimate.textContent = `Szacowany koszt: ${costPLN} PLN`;
+  // Użyj bieżącego kursu ETH za 1 KRS; fallback na 0.0001 gdy brak danych
+  const priceEthPerKRS = (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
+    ? window.krsEthPrice
+    : 0.0001;
 
-      if (userEthBalance === 0) {
-        costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
-      } else if (userEthBalance < ethNeeded + 0.005) {
-        costEstimate.textContent = `⚠️ Za mało ETH. Potrzeba około ${(ethNeeded + 0.005).toFixed(6)} ETH (kupno + gas), masz ${userEthBalance.toFixed(6)} ETH`;
-      } else {
-        costEstimate.textContent = "";
-      }
+  if (!isNaN(amount) && amount > 0 && currency === "ETH") {
+    const ethNeeded = amount * priceEthPerKRS;
+    const costPLN = ethToPln > 0 ? (ethNeeded * ethToPln) : NaN;
+
+    preview.textContent =
+      `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS ` +
+      `(1 KRS = ${priceEthPerKRS.toFixed(6)} ETH)`;
+
+    plnEstimate.textContent = isFinite(costPLN)
+      ? `Szacowany koszt: ${costPLN.toFixed(2)} PLN`
+      : `Szacowany koszt: -`;
+
+    // prosty bufor na gas (np. 0.005 ETH); możesz podmienić na dynamiczny
+    const gasBuffer = 0.005;
+    if (userEthBalance === 0) {
+      costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
+    } else if (userEthBalance < ethNeeded + gasBuffer) {
+      costEstimate.textContent =
+        `⚠️ Za mało ETH. Potrzeba ~${(ethNeeded + gasBuffer).toFixed(6)} ETH (kupno + gas), ` +
+        `masz ${userEthBalance.toFixed(6)} ETH`;
+    } else {
+      costEstimate.textContent = "";
     }
   } else {
     preview.textContent = "";
@@ -35,6 +70,9 @@ function updateConversionPreview() {
     costEstimate.textContent = "";
   }
 }
+
+
+
 </script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
@@ -168,16 +206,15 @@ async function fetchKRSPool() {
       throw new Error("Brak danych o puli (pool) w kursy.json");
     }
 
-    document.getElementById("krsPoolUSDC").textContent = parseFloat(kursData.pool.krs_usdc).toFixed(2);
-    document.getElementById("usdcPool").textContent = parseFloat(kursData.pool.usdc).toFixed(2);
-    document.getElementById("krsPoolWETH").textContent = parseFloat(kursData.pool.krs_weth).toFixed(2);
-    document.getElementById("ethPool").textContent = parseFloat(kursData.pool.weth).toFixed(4);
-    
-    
+    document.getElementById("krsPoolUSDC").textContent = fmt(kursData.pool.krs_usdc, 2);
+    document.getElementById("usdcPool").textContent   = fmt(kursData.pool.usdc, 2);
+    document.getElementById("krsPoolWETH").textContent = fmt(kursData.pool.krs_weth, 2);
+    document.getElementById("ethPool").textContent     = fmt(kursData.pool.weth, 6);
 
-    document.getElementById("poolValueUSD").textContent = parseFloat(kursData.pool.value_usd).toFixed(2);
-    document.getElementById("poolValueETH").textContent = parseFloat(kursData.pool.value_eth).toFixed(6);
-    document.getElementById("poolValuePLN").textContent = parseFloat(kursData.pool.value_pln).toFixed(2);
+    document.getElementById("poolValueUSD").textContent = fmt(kursData.pool.value_usd, 2);
+    document.getElementById("poolValueETH").textContent = fmt(kursData.pool.value_eth, 6);
+    document.getElementById("poolValuePLN").textContent = fmt(kursData.pool.value_pln, 2);
+
 
     
     
@@ -347,31 +384,55 @@ const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
       }
     }
 
-    async function fetchKursy() {
+    
+async function fetchKursy() {
   try {
+    // dane z Twojego JSON-a
     const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
     const kursData = await kursRes.json();
+    // po pobraniu kursData
+    window.krsEthPrice = Number(kursData.WETH); // ETH za 1 KRS (z Twojego JSON-a/Quotera)
 
-    document.getElementById("WETH").textContent = `${parseFloat(kursData.WETH).toFixed(6)} PLN`;
-    document.getElementById("USDC").textContent = `${parseFloat(kursData.USDC).toFixed(6)} USD`;
+    // 1) Wyświetl rzeczywiste kursy z JSON-a z sensownymi jednostkami
+    //   - KRS/ETH to ile ETH kosztuje 1 KRS
+    //   - KRS/USDC to ile USD kosztuje 1 KRS
+    console.log("kursData.WETH =", kursData.WETH);
 
-    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum,usd&vs_currencies=pln", { cache: "no-cache" });
+    document.getElementById("WETH").textContent = `${fmt(kursData.WETH, 8)} ETH`;   // NIE PLN
+    document.getElementById("USDC").textContent = `${fmt(kursData.USDC, 6)} USD`;
+
+    // 2) Kurs ETH w PLN z rynku (bez „usd” w zapytaniu – to zły ID)
+    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln", { cache: "no-cache" });
     const ethData = await ethRes.json();
-    const ethPln = ethData.ethereum?.pln;
-    const usdPln = ethData.usd?.pln || 4.0;
-    document.getElementById("ETHREAL").textContent = `${parseFloat(ethPln).toFixed(2)} PLN`;
+    const ethPln = Number(ethData?.ethereum?.pln);
+    document.getElementById("ETHREAL").textContent = Number.isFinite(ethPln) ? `${fmt(ethPln, 2)} PLN` : "-";
 
-    const kursEthZKrs = (kursData.USDC * usdPln) / kursData.WETH;
-    document.getElementById("ETHPLN").textContent = `${kursEthZKrs.toFixed(2)} PLN`;
+    // 3) ETH w PLN wyliczone z par KRS (USDC i WETH)
+    //    ETH/PLN ≈ (KRS/USDC * USD/PLN) / (KRS/ETH)
+    const USDPLN_FALLBACK = 4.0;
+    // jeśli masz gdzieś w JSON kurs USD/PLN, podstaw tutaj zamiast fallbacku
+    const usdPln = USDPLN_FALLBACK;
 
-    const diff = Math.abs(kursEthZKrs - ethPln) / ethPln;
+    const ethPlnFromKrs = (Number(kursData.WETH) > 0)
+    ? safeDiv(Number(kursData.USDC) * usdPln, Number(kursData.WETH))
+    : NaN;
+
+    document.getElementById("ETHPLN").textContent = Number.isFinite(ethPlnFromKrs) ? `${fmt(ethPlnFromKrs, 2)} PLN` : "-";
+
+    // 4) Alert tylko jeśli mamy oba sensowne kursy
+    const diff = (Number.isFinite(ethPlnFromKrs) && Number.isFinite(ethPln) && ethPln > 0)
+      ? Math.abs(ethPlnFromKrs - ethPln) / ethPln
+      : 0;
     document.getElementById("alertBox").style.display = diff > 0.05 ? "block" : "none";
+
   } catch (e) {
     console.error("Błąd pobierania danych:", e);
     document.getElementById("ETHREAL").textContent = "Błąd";
     document.getElementById("ETHPLN").textContent = "Błąd";
   }
 }
+
+
 
 window.addEventListener("DOMContentLoaded", () => {
       fetchKursy();
