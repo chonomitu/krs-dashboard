@@ -49,7 +49,8 @@ function updateConversionPreview() {
       `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS ` +
       `(1 KRS = ${priceEthPerKRS.toFixed(6)} ETH)`;
 
-    plnEstimate.textContent = isFinite(costPLN)
+    const haveEthPln = Number.isFinite(window.ethPln) && window.ethPln > 1000;
+    plnEstimate.textContent = (haveEthPln && isFinite(costPLN))
       ? `Szacowany koszt: ${costPLN.toFixed(2)} PLN`
       : `Szacowany koszt: -`;
 
@@ -199,7 +200,9 @@ function updateConversionPreview() {
 async function fetchKRSPool() {
   document.getElementById("poolBox").style.display = "block";
   try {
-    const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
+    const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" }
+  );
+
     const kursData = await kursRes.json();
 
     if (!kursData.pool) {
