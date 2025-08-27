@@ -7,7 +7,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
 <script>
 
- 
 function fmt(n, frac=6, minFrac=0) {
   if (n === null || n === undefined) return "-";
   const num = Number(n);
@@ -25,45 +24,69 @@ function safeDiv(a, b) {
   return x / y;
 }
 
-
-
-
 function updateConversionPreview() {
   const preview = document.getElementById("conversionPreview");
   const costEstimate = document.getElementById("costEstimate");
   const plnEstimate = document.getElementById("plnEstimate");
   const amount = parseFloat(document.getElementById("amountToBuy").value);
   const currency = document.getElementById("currencySelect").value;
-  const ethToPln = (Number.isFinite(window.ethPln) && window.ethPln > 0) ? window.ethPln : NaN; // OK: parseFloat utnie " PLN"
 
-  // Użyj bieżącego kursu ETH za 1 KRS; fallback na 0.0001 gdy brak danych
+  // kursy z window ustawiane w fetchKursy()
+  const ethToPln = (Number.isFinite(window.ethPln) && window.ethPln > 0) ? window.ethPln : NaN;
+  const usdToPln = (Number.isFinite(window.usdPln) && window.usdPln > 0) ? window.usdPln : NaN;
+
   const priceEthPerKRS = (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
     ? window.krsEthPrice
-    : 0.0001;
+    : 0.0001; // fallback
 
-  if (!isNaN(amount) && amount > 0 && currency === "ETH") {
-    const ethNeeded = amount * priceEthPerKRS;
-    const costPLN = ethToPln > 0 ? (ethNeeded * ethToPln) : NaN;
+  const priceUsdPerKRS = (typeof window.krsUsdPrice === "number" && isFinite(window.krsUsdPrice) && window.krsUsdPrice > 0)
+    ? window.krsUsdPrice
+    : NaN;
 
-    preview.textContent =
-      `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS ` +
-      `(1 KRS = ${priceEthPerKRS.toFixed(6)} ETH)`;
+  if (!isNaN(amount) && amount > 0) {
+    if (currency === "ETH") {
+      const ethNeeded = amount * priceEthPerKRS;
+      const costPLN = Number.isFinite(ethToPln) ? (ethNeeded * ethToPln) : NaN;
 
-    const haveEthPln = Number.isFinite(window.ethPln) && window.ethPln > 1000;
-    plnEstimate.textContent = (haveEthPln && isFinite(costPLN))
-      ? `Szacowany koszt: ${costPLN.toFixed(2)} PLN`
-      : `Szacowany koszt: -`;
+      preview.textContent = `Przybliżona cena: ${ethNeeded.toFixed(6)} ETH za ${amount} KRS (1 KRS = ${priceEthPerKRS.toFixed(6)} ETH)`;
 
-    // prosty bufor na gas (np. 0.005 ETH); możesz podmienić na dynamiczny
-    const gasBuffer = 0.005;
-    if (userEthBalance === 0) {
-      costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
-    } else if (userEthBalance < ethNeeded + gasBuffer) {
-      costEstimate.textContent =
-        `⚠️ Za mało ETH. Potrzeba ~${(ethNeeded + gasBuffer).toFixed(6)} ETH (kupno + gas), ` +
-        `masz ${userEthBalance.toFixed(6)} ETH`;
-    } else {
-      costEstimate.textContent = "";
+      const haveEthPln = Number.isFinite(ethToPln) && ethToPln > 1000;
+      plnEstimate.textContent = (haveEthPln && isFinite(costPLN))
+        ? `Szacowany koszt: ${costPLN.toFixed(2)} PLN`
+        : `Szacowany koszt: -`;
+
+      const gasBuffer = 0.005;
+      if (userEthBalance === 0) {
+        costEstimate.textContent = "⚠️ Niepołączony portfel lub brak salda ETH";
+      } else if (userEthBalance < ethNeeded + gasBuffer) {
+        costEstimate.textContent =
+          `⚠️ Za mało ETH. Potrzeba ~${(ethNeeded + gasBuffer).toFixed(6)} ETH (kupno + gas), masz ${userEthBalance.toFixed(6)} ETH`;
+      } else {
+        costEstimate.textContent = "";
+      }
+    } else if (currency === "USDC") {
+      const usdcNeeded = amount * priceUsdPerKRS; // ile USDC trzeba włożyć
+      const costPLN = Number.isFinite(usdToPln) ? (usdcNeeded * usdToPln) : NaN;
+
+      preview.textContent =
+        `Przybliżona cena: ${fmt(usdcNeeded, 6, 2)} USDC za ${amount} KRS ` +
+        `(1 KRS = ${fmt(priceUsdPerKRS, 6, 2)} USDC)`;
+
+      plnEstimate.textContent = isFinite(costPLN)
+        ? `Szacowany koszt: ${fmt(costPLN, 2, 2)} PLN`
+        : `Szacowany koszt: -`;
+
+      // ostrzeżenia o saldzie (USDC na zakup + ETH na gas)
+      const gasBufferEth = 0.002;
+      if (userUsdcBalance === 0) {
+        costEstimate.textContent = "⚠️ Brak salda USDC lub niepołączony portfel";
+      } else if (userUsdcBalance < usdcNeeded) {
+        costEstimate.textContent = `⚠️ Za mało USDC. Potrzeba ~${fmt(usdcNeeded, 6, 2)} USDC, masz ${fmt(userUsdcBalance, 6, 2)} USDC`;
+      } else if (userEthBalance < gasBufferEth) {
+        costEstimate.textContent = `⚠️ Za mało ETH na opłaty (~${gasBufferEth} ETH)`;
+      } else {
+        costEstimate.textContent = "";
+      }
     }
   } else {
     preview.textContent = "";
@@ -71,9 +94,6 @@ function updateConversionPreview() {
     costEstimate.textContent = "";
   }
 }
-
-
-
 </script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
@@ -161,6 +181,8 @@ function updateConversionPreview() {
     <input type="number" id="amountToBuy" placeholder="Podaj ilość KRS" oninput="updateConversionPreview()" />
     <select id="currencySelect" onchange="updateConversionPreview()">
       <option value="ETH">ETH</option>
+      <!-- DODANE: USDC -->
+      <option value="USDC">USDC</option>
     </select>
     <br><br>
     <div id="costEstimate" style="margin-top:1em; font-size:0.9em; color:#f88;"></div>
@@ -194,15 +216,12 @@ function updateConversionPreview() {
     <button onclick="addTokenToWallet()">➕ Dodaj KRS do portfela</button>
   </div>
   <script>
-    // Cały skrypt taki sam jak poprzednio, z zakomentowanym kodem kupna USDC w funkcji buyKRS()
     const DEBUG = false;
 
 async function fetchKRSPool() {
   document.getElementById("poolBox").style.display = "block";
   try {
-    const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" }
-  );
-
+    const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" });
     const kursData = await kursRes.json();
 
     if (!kursData.pool) {
@@ -217,10 +236,6 @@ async function fetchKRSPool() {
     document.getElementById("poolValueUSD").textContent = fmt(kursData.pool.value_usd, 2);
     document.getElementById("poolValueETH").textContent = fmt(kursData.pool.value_eth, 6);
     document.getElementById("poolValuePLN").textContent = fmt(kursData.pool.value_pln, 2);
-
-
-    
-    
   } catch (err) {
     console.error("Nie udało się pobrać danych puli:", err);
     document.getElementById("poolBox").innerHTML = "<span style='color:#f55;'>❌ Brak danych o puli w kursy.json</span>";
@@ -228,215 +243,256 @@ async function fetchKRSPool() {
   }
 }
 
+// *** STAŁE ***
 const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
-    const USDC_ADDRESS = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8";
-    const KRS_USDC_POOL_ADDRESS = "0xca71156bFe3bBecb281B78BF8bd9C083D1db222b";
-    const UNISWAP_V3_POOL_ABI = [
-      "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
-      "function token0() view returns (address)",
-      "function token1() view returns (address)"
-    ];
 
-    const ABI = [
-      "function balanceOf(address owner) view returns (uint256)",
-      "function decimals() view returns (uint8)",
-      "function approve(address spender, uint256 amount) returns (bool)"
-    ];
+// STARY adres USDC.e (zostawiony, ale nieużywany):
+// const USDC_ADDRESS = "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8";
 
-    let provider, signer;
-    let userEthBalance = 0;
-    let userUsdcBalance = 0;
+// NOWY: natywny USDC na Arbitrum (6 dec) – UŻYWANY:
+const USDC_ADDRESS = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
 
-    async function connectWallet() {
-      try {
-        if (!window.ethereum) throw new Error("MetaMask nie jest zainstalowany.");
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = provider.getSigner();
-        const address = await signer.getAddress();
-        document.getElementById("wallet-address").textContent = address;
-        document.querySelector(".button-wrapper button").textContent = "❌ Odłącz portfel";
-        document.querySelector(".button-wrapper button").onclick = disconnectWallet;
-        document.getElementById("buyBox").style.display = "block";
+const KRS_USDC_POOL_ADDRESS = "0xca71156bFe3bBecb281B78BF8bd9C083D1db222b";
 
-        fetchBalances();
-        fetchKRSBalance(address);
-      } catch (err) {
-        alert("Nie udało się połączyć z portfelem: " + err.message);
-        console.error(err);
-      }
-    }
+const UNISWAP_V3_POOL_ABI = [
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)"
+];
 
-    function disconnectWallet() {
-      provider = null;
-      signer = null;
-      document.getElementById("wallet-address").textContent = "Nie połączono";
-      document.querySelector(".button-wrapper button").textContent = "🔗 Połącz portfel";
-      document.querySelector(".button-wrapper button").onclick = connectWallet;
-      document.getElementById("buyBox").style.display = "none";
-      document.getElementById("balanceBox").style.display = "none";
-    }
+const ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)"
+];
 
-    async function fetchBalances() {
-      if (!signer) return;
-      try {
-        const address = await signer.getAddress();
-        const ethBalanceRaw = await provider.getBalance(address);
-        userEthBalance = parseFloat(ethers.utils.formatEther(ethBalanceRaw));
+let provider, signer;
+let userEthBalance = 0;
+let userUsdcBalance = 0;
 
-        const usdcContract = new ethers.Contract(USDC_ADDRESS, ["function balanceOf(address) view returns (uint256)"], provider);
-        const usdcBalanceRaw = await usdcContract.balanceOf(address);
-        userUsdcBalance = parseFloat(ethers.utils.formatUnits(usdcBalanceRaw, 6));
+async function connectWallet() {
+  try {
+    if (!window.ethereum) throw new Error("MetaMask nie jest zainstalowany.");
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+    const address = await signer.getAddress();
+    document.getElementById("wallet-address").textContent = address;
+    document.querySelector(".button-wrapper button").textContent = "❌ Odłącz portfel";
+    document.querySelector(".button-wrapper button").onclick = disconnectWallet;
+    document.getElementById("buyBox").style.display = "block";
 
-        updateConversionPreview();
-      } catch (e) {
-        console.error("Błąd pobierania sald:", e);
-      }
-    }
+    fetchBalances();
+    fetchKRSBalance(address);
+  } catch (err) {
+    alert("Nie udało się połączyć z portfelem: " + err.message);
+    console.error(err);
+  }
+}
 
-    async function fetchKRSBalance(address) {
-      try {
-        const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
-        const rawBalance = await contract.balanceOf(address);
-        const decimals = await contract.decimals();
-        const balance = ethers.utils.formatUnits(rawBalance, decimals);
-        document.getElementById("balanceBox").style.display = "block";
-        document.getElementById("krsBalance").textContent = parseFloat(balance).toFixed(2);
-      } catch (err) {
-        console.error("Nie udało się pobrać salda KRS:", err);
-      }
-    }
+function disconnectWallet() {
+  provider = null;
+  signer = null;
+  document.getElementById("wallet-address").textContent = "Nie połączono";
+  document.querySelector(".button-wrapper button").textContent = "🔗 Połącz portfel";
+  document.querySelector(".button-wrapper button").onclick = connectWallet;
+  document.getElementById("buyBox").style.display = "none";
+  document.getElementById("balanceBox").style.display = "none";
+}
 
-    async function getCurrentKrsUsdcPrice() {
-      const poolContract = new ethers.Contract(KRS_USDC_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
-      const token0 = await poolContract.token0();
-      const token1 = await poolContract.token1();
-      const slot0 = await poolContract.slot0();
-      const sqrtPriceX96 = slot0.sqrtPriceX96;
+async function fetchBalances() {
+  if (!signer) return;
+  try {
+    const address = await signer.getAddress();
+    const ethBalanceRaw = await provider.getBalance(address);
+    userEthBalance = parseFloat(ethers.utils.formatEther(ethBalanceRaw));
 
-      const decimals0 = (token0.toLowerCase() === USDC_ADDRESS.toLowerCase()) ? 6 : 18;
-      const decimals1 = (token1.toLowerCase() === KRS_CONTRACT.toLowerCase()) ? 18 : 6;
+    // UWAGA: teraz odpyta NATYWNY USDC (0xaf88…)
+    const usdcContract = new ethers.Contract(USDC_ADDRESS, ["function balanceOf(address) view returns (uint256)"], provider);
+    const usdcBalanceRaw = await usdcContract.balanceOf(address);
+    userUsdcBalance = parseFloat(ethers.utils.formatUnits(usdcBalanceRaw, 6));
 
-      const priceRaw = (sqrtPriceX96 / 2 ** 96) ** 2;
-      const price = priceRaw * 10 ** (decimals0 - decimals1);
+    updateConversionPreview();
+  } catch (e) {
+    console.error("Błąd pobierania sald:", e);
+  }
+}
 
-      return price;
-    }
+async function fetchKRSBalance(address) {
+  try {
+    const contract = new ethers.Contract(KRS_CONTRACT, ABI, provider);
+    const rawBalance = await contract.balanceOf(address);
+    const decimals = await contract.decimals();
+    const balance = ethers.utils.formatUnits(rawBalance, decimals);
+    document.getElementById("balanceBox").style.display = "block";
+    document.getElementById("krsBalance").textContent = parseFloat(balance).toFixed(2);
+  } catch (err) {
+    console.error("Nie udało się pobrać salda KRS:", err);
+  }
+}
 
-    async function buyKRS() {
-      try {
-        const userAddress = await signer.getAddress();
-        const deadline = Math.floor(Date.now() / 1000) + 1800;
-        const gasPrice = await provider.getGasPrice();
-        const gasCost = ethers.utils.formatUnits(gasPrice.mul(210000), "gwei");
-        const amountStr = document.getElementById("amountToBuy").value;
-        const amount = parseFloat(amountStr);
-        const currency = document.getElementById("currencySelect").value;
+async function getCurrentKrsUsdcPrice() {
+  const poolContract = new ethers.Contract(KRS_USDC_POOL_ADDRESS, UNISWAP_V3_POOL_ABI, provider);
+  const token0 = await poolContract.token0();
+  const token1 = await poolContract.token1();
+  const slot0 = await poolContract.slot0();
+  const sqrtPriceX96 = slot0.sqrtPriceX96;
 
-        console.log("Kupno KRS: amount =", amount, ", currency =", currency);
+  const decimals0 = (token0.toLowerCase() === USDC_ADDRESS.toLowerCase()) ? 6 : 18;
+  const decimals1 = (token1.toLowerCase() === KRS_CONTRACT.toLowerCase()) ? 18 : 6;
 
-        if (!isNaN(amount) && amount > 0) {
-          const router = new ethers.Contract(
-            "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-            [
-              "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256)"
-            ],
-            signer
-          );
+  const priceRaw = (sqrtPriceX96 / 2 ** 96) ** 2;
+  const price = priceRaw * 10 ** (decimals0 - decimals1);
 
-          if (currency === "ETH") {
-            const priceEthPerKRS =
-            (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
-              ? window.krsEthPrice
-              : 0.0001; // awaryjnie
+  return price;
+}
 
-            const ethAmount = ethers.utils.parseEther((amount * priceEthPerKRS).toFixed(6));
+async function buyKRS() {
+  try {
+    const userAddress = await signer.getAddress();
+    const deadline = Math.floor(Date.now() / 1000) + 1800;
+    const gasPrice = await provider.getGasPrice();
+    const gasCost = ethers.utils.formatUnits(gasPrice.mul(210000), "gwei");
+    const amountStr = document.getElementById("amountToBuy").value;
+    const amount = parseFloat(amountStr);
+    const currency = document.getElementById("currencySelect").value;
 
-            const WETH = new ethers.Contract("0x82af49447d8a07e3bd95bd0d56f35241523fbab1", [
-              "function deposit() payable",
-              "function approve(address,uint256) returns (bool)"
-            ], signer);
+    console.log("Kupno KRS: amount =", amount, ", currency =", currency);
 
-            console.log("ETH buy: Wrapping ETH...");
-            const wrapTx = await WETH.deposit({ value: ethAmount });
-            await wrapTx.wait();
-            console.log("ETH buy: Wrapped ETH, approving router...");
-            await WETH.approve(router.address, ethAmount);
+    if (!isNaN(amount) && amount > 0) {
+      const router = new ethers.Contract(
+        "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+        [
+          "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256)"
+        ],
+        signer
+      );
 
-            const params = {
-              tokenIn: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-              tokenOut: KRS_CONTRACT,
-              fee: 3000,
-              recipient: userAddress,
-              deadline: deadline,
-              amountIn: ethAmount,
-              amountOutMinimum: 0,
-              sqrtPriceLimitX96: ethers.constants.Zero
-            };
+      if (currency === "ETH") {
+        const priceEthPerKRS =
+          (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
+            ? window.krsEthPrice
+            : 0.0001; // awaryjnie
 
-            console.log("ETH buy: Calling exactInputSingle with params:", params);
-            const tx = await router.exactInputSingle(params);
-            document.getElementById("buyStatus").textContent = "⏳ Trwa przetwarzanie...";
-            await tx.wait();
-            console.log("ETH buy: Swap completed.");
-          } /* else if (currency === "USDC") {
-            // Kupno USDC - tymczasowo wyłączone
-          } */
+        const ethAmount = ethers.utils.parseEther((amount * priceEthPerKRS).toFixed(6));
 
-          document.getElementById("buyStatus").textContent = "✅ Zakup zakończony przez Uniswap!";
-          fetchKRSBalance(userAddress);
-          fetchKRSPool();
+        const WETH = new ethers.Contract("0x82af49447d8a07e3bd95bd0d56f35241523fbab1", [
+          "function deposit() payable",
+          "function approve(address,uint256) returns (bool)"
+        ], signer);
+
+        console.log("ETH buy: Wrapping ETH...");
+        const wrapTx = await WETH.deposit({ value: ethAmount });
+        await wrapTx.wait();
+        console.log("ETH buy: Wrapped ETH, approving router...");
+        await WETH.approve(router.address, ethAmount);
+
+        const params = {
+          tokenIn: "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+          tokenOut: KRS_CONTRACT,
+          fee: 3000,
+          recipient: userAddress,
+          deadline: deadline,
+          amountIn: ethAmount,
+          amountOutMinimum: 0, // TODO: dodać minimówkę po quoterze
+          sqrtPriceLimitX96: ethers.constants.Zero
+        };
+
+        console.log("ETH buy: Calling exactInputSingle with params:", params);
+        const tx = await router.exactInputSingle(params);
+        document.getElementById("buyStatus").textContent = "⏳ Trwa przetwarzanie...";
+        await tx.wait();
+        console.log("ETH buy: Swap completed.");
+      } else if (currency === "USDC") {
+        // DODANE: zakup KRS za USDC (natywny 0xaf88…)
+        const priceUsdPerKRS =
+          (typeof window.krsUsdPrice === "number" && isFinite(window.krsUsdPrice) && window.krsUsdPrice > 0)
+            ? window.krsUsdPrice : NaN;
+        if (!isFinite(priceUsdPerKRS)) throw new Error("Brak aktualnej ceny KRS w USDC");
+
+        const usdcNeededFloat = amount * priceUsdPerKRS;
+        const usdcAmount = ethers.utils.parseUnits(usdcNeededFloat.toFixed(6), 6); // USDC 6 dec
+
+        const USDC = new ethers.Contract(USDC_ADDRESS, [
+          "function approve(address,uint256) returns (bool)",
+          "function allowance(address,address) view returns (uint256)"
+        ], signer);
+
+        const allowance = await USDC.allowance(userAddress, router.address);
+        if (allowance.lt(usdcAmount)) {
+          const approveTx = await USDC.approve(router.address, usdcAmount);
+          document.getElementById("buyStatus").textContent = "⏳ Zgoda na wydanie USDC...";
+          await approveTx.wait();
         }
-      } catch (err) {
-        console.error("Błąd zakupu:", err);
-        document.getElementById("buyStatus").textContent = "❌ Błąd zakupu: " + (err.message || err);
-      }
-    }
 
-    
+        const params = {
+          tokenIn: USDC_ADDRESS,
+          tokenOut: KRS_CONTRACT,
+          fee: 3000,
+          recipient: userAddress,
+          deadline: deadline,
+          amountIn: usdcAmount,
+          amountOutMinimum: 0, // TODO: dodać slippage + minOut po quoterze
+          sqrtPriceLimitX96: ethers.constants.Zero
+        };
+
+        console.log("USDC buy: Calling exactInputSingle with params:", params);
+        const tx = await router.exactInputSingle(params);
+        document.getElementById("buyStatus").textContent = "⏳ Trwa przetwarzanie...";
+        await tx.wait();
+        console.log("USDC buy: Swap completed.");
+      }
+
+      document.getElementById("buyStatus").textContent = "✅ Zakup zakończony przez Uniswap!";
+      await fetchBalances();
+      const ua = await signer.getAddress();
+      fetchKRSBalance(ua);
+      fetchKRSPool();
+    }
+  } catch (err) {
+    console.error("Błąd zakupu:", err);
+    document.getElementById("buyStatus").textContent = "❌ Błąd zakupu: " + (err.message || err);
+  }
+}
+
 async function fetchKursy() {
   try {
-    // dane z Twojego JSON-a
-    const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json", { cache: "no-cache" });
+    // dane z Twojego JSON-a – dodane bust cache
+    const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" });
     const kursData = await kursRes.json();
-    // po pobraniu kursData
-    window.krsEthPrice = Number(kursData.WETH); // ETH za 1 KRS (z Twojego JSON-a/Quotera)
 
-    // 1) Wyświetl rzeczywiste kursy z JSON-a z sensownymi jednostkami
-    //   - KRS/ETH to ile ETH kosztuje 1 KRS
-    //   - KRS/USDC to ile USD kosztuje 1 KRS
+    // zapisz ceny do window
+    window.krsEthPrice = Number(kursData.WETH); // ETH za 1 KRS
+    window.krsUsdPrice = Number(kursData.USDC); // USD za 1 KRS
+
     console.log("kursData.WETH =", kursData.WETH);
 
-    document.getElementById("WETH").textContent = `${fmt(kursData.WETH, 8)} ETH`;   // NIE PLN
+    // wyświetlenie KRS/ETH i KRS/USDC
+    document.getElementById("WETH").textContent = `${fmt(kursData.WETH, 8)} ETH`;
     document.getElementById("USDC").textContent = `${fmt(kursData.USDC, 6)} USD`;
 
-    // 2) Kurs ETH w PLN z rynku (bez „usd” w zapytaniu – to zły ID)
-    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln", { cache: "no-cache" });
+    // ETH w PLN i USD (do USD/PLN)
+    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln,usd", { cache: "no-cache" });
     const ethData = await ethRes.json();
- 
-    // w fetchKursy(), po policzeniu ethPln:
+
     const ethPln = Number(ethData?.ethereum?.pln);
+    const ethUsd = Number(ethData?.ethereum?.usd);
     window.ethPln = (Number.isFinite(ethPln) && ethPln > 0) ? ethPln : NaN;
+    window.usdPln = (Number.isFinite(ethPln) && Number.isFinite(ethUsd) && ethUsd > 0) ? (ethPln / ethUsd) : 4.0;
 
+    // odśwież podgląd kosztu po pobraniu kursów
     if (typeof updateConversionPreview === "function") updateConversionPreview();
-
 
     document.getElementById("ETHREAL").textContent = Number.isFinite(window.ethPln) ? `${fmt(window.ethPln, 2)} PLN` : "-";
 
-
-    // 3) ETH w PLN wyliczone z par KRS (USDC i WETH)
-    //    ETH/PLN ≈ (KRS/USDC * USD/PLN) / (KRS/ETH)
-    const USDPLN_FALLBACK = 4.0;
-    // jeśli masz gdzieś w JSON kurs USD/PLN, podstaw tutaj zamiast fallbacku
-    const usdPln = USDPLN_FALLBACK;
-
+    // ETH/PLN z par KRS (heurystyka)
+    const usdPln = window.usdPln ?? 4.0;
     const ethPlnFromKrs = (Number(kursData.WETH) > 0)
-    ? safeDiv(Number(kursData.USDC) * usdPln, Number(kursData.WETH))
-    : NaN;
+      ? safeDiv(Number(kursData.USDC) * usdPln, Number(kursData.WETH))
+      : NaN;
 
     document.getElementById("ETHPLN").textContent = Number.isFinite(ethPlnFromKrs) ? `${fmt(ethPlnFromKrs, 2)} PLN` : "-";
 
-    // 4) Alert tylko jeśli mamy oba sensowne kursy
     const diff = (Number.isFinite(ethPlnFromKrs) && Number.isFinite(ethPln) && ethPln > 0)
       ? Math.abs(ethPlnFromKrs - ethPln) / ethPln
       : 0;
@@ -449,14 +505,11 @@ async function fetchKursy() {
   }
 }
 
-
-
 window.addEventListener("DOMContentLoaded", () => {
-      fetchKursy();
-      fetchKRSPool();
-    });
+  fetchKursy();
+  fetchKRSPool();
+});
   </script>
-
 
   <script>
   function copyKRSAddress() {
@@ -491,7 +544,7 @@ window.addEventListener("DOMContentLoaded", () => {
           address: '0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070', // KRS token
           symbol: 'KRS',
           decimals: 18,
-          image: 'https://kyrson.pl/static/img/krs-icon.png' // możesz zmienić
+          image: 'https://kyrson.pl/static/img/krs-icon.png'
         }
       }
     })
@@ -508,7 +561,6 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
   </script>
-
 
 </body>
 </html>
