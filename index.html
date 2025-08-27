@@ -34,7 +34,7 @@ function updateConversionPreview() {
   const plnEstimate = document.getElementById("plnEstimate");
   const amount = parseFloat(document.getElementById("amountToBuy").value);
   const currency = document.getElementById("currencySelect").value;
-  const ethToPln = parseFloat(document.getElementById("ETHREAL").textContent) || 0; // OK: parseFloat utnie " PLN"
+  const ethToPln = (Number.isFinite(window.ethPln) && window.ethPln > 0) ? window.ethPln : NaN; // OK: parseFloat utnie " PLN"
 
   // Użyj bieżącego kursu ETH za 1 KRS; fallback na 0.0001 gdy brak danych
   const priceEthPerKRS = (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
@@ -342,7 +342,13 @@ const KRS_CONTRACT = "0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070";
           );
 
           if (currency === "ETH") {
-            const ethAmount = ethers.utils.parseEther((amount * 0.0001).toFixed(6));
+            const priceEthPerKRS =
+            (typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)
+              ? window.krsEthPrice
+              : 0.0001; // awaryjnie
+
+            const ethAmount = ethers.utils.parseEther((amount * priceEthPerKRS).toFixed(6));
+
             const WETH = new ethers.Contract("0x82af49447d8a07e3bd95bd0d56f35241523fbab1", [
               "function deposit() payable",
               "function approve(address,uint256) returns (bool)"
@@ -404,8 +410,16 @@ async function fetchKursy() {
     // 2) Kurs ETH w PLN z rynku (bez „usd” w zapytaniu – to zły ID)
     const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln", { cache: "no-cache" });
     const ethData = await ethRes.json();
+ 
+    // w fetchKursy(), po policzeniu ethPln:
     const ethPln = Number(ethData?.ethereum?.pln);
-    document.getElementById("ETHREAL").textContent = Number.isFinite(ethPln) ? `${fmt(ethPln, 2)} PLN` : "-";
+    window.ethPln = (Number.isFinite(ethPln) && ethPln > 0) ? ethPln : NaN;
+
+    if (typeof updateConversionPreview === "function") updateConversionPreview();
+
+
+    document.getElementById("ETHREAL").textContent = Number.isFinite(window.ethPln) ? `${fmt(window.ethPln, 2)} PLN` : "-";
+
 
     // 3) ETH w PLN wyliczone z par KRS (USDC i WETH)
     //    ETH/PLN ≈ (KRS/USDC * USD/PLN) / (KRS/ETH)
