@@ -31,6 +31,22 @@ function updateConversionPreview() {
   const amount = parseFloat(document.getElementById("amountToBuy").value);
   const currency = document.getElementById("currencySelect").value;
 
+
+  // na samym początku updateConversionPreview(), po pobraniu amount/currency:
+  if (currency === "ETH" && !(typeof window.krsEthPrice === "number" && isFinite(window.krsEthPrice) && window.krsEthPrice > 0)) {
+    document.getElementById("conversionPreview").textContent = "⏳ Ładowanie kursu...";
+    document.getElementById("plnEstimate").textContent = "";
+    document.getElementById("costEstimate").textContent = "";
+    return;
+  }
+  if (currency === "USDC" && !(typeof window.krsUsdPrice === "number" && isFinite(window.krsUsdPrice) && window.krsUsdPrice > 0)) {
+    document.getElementById("conversionPreview").textContent = "⏳ Ładowanie kursu...";
+    document.getElementById("plnEstimate").textContent = "";
+    document.getElementById("costEstimate").textContent = "";
+    return;
+  }
+
+
   // kursy z window ustawiane w fetchKursy()
   const ethToPln = (Number.isFinite(window.ethPln) && window.ethPln > 0) ? window.ethPln : NaN;
   const usdToPln = (Number.isFinite(window.usdPln) && window.usdPln > 0) ? window.usdPln : NaN;
@@ -475,24 +491,27 @@ async function fetchKursy() {
     document.getElementById("USDC").textContent = `${fmt(kursData.USDC, 6)} USD`;
 
     // ETH w PLN i USD (do USD/PLN)
-    const ethRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln,usd", { cache: "no-cache" });
+    const ethRes = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=pln,usd",
+      { cache: "no-store" }
+    );
     const ethData = await ethRes.json();
 
     const ethPln = Number(ethData?.ethereum?.pln);
-    // const ethUsd = Number(ethData?.ethereum?.usd);
+    const ethUsd = Number(ethData?.ethereum?.usd);
+
     window.ethPln = (Number.isFinite(ethPln) && ethPln > 0) ? ethPln : NaN;
-    window.usdPln = (Number.isFinite(ethPln) && Number.isFinite(ethUsd) && ethUsd > 0) ? (ethPln / ethUsd) : 4.0;
+    window.usdPln = (Number.isFinite(ethPln) && Number.isFinite(ethUsd) && ethUsd > 0)
+      ? (ethPln / ethUsd)
+      : 4.0;
 
-
-    // dociągnij ETH/USD i policz ETH/KRS = (USDC/KRS) / (ETH/USD)
-    const ethUsdRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", { cache: "no-store" } );
-    const ethUsd = Number((await ethUsdRes.json())?.ethereum?.usd);
-    if (Number.isFinite(ethUsd) && Number(kursData.USDC) > 0) {
-      window.krsEthPrice = Number(kursData.USDC) / ethUsd; // **ETH za 1 KRS**
+    // **Tu od razu policz właściwy ETH/KRS z USDC/KRS**
+    if (Number.isFinite(ethUsd) && ethUsd > 0 && Number(kursData.USDC) > 0) {
+      window.krsEthPrice = Number(kursData.USDC) / ethUsd; // ETH za 1 KRS
     }
 
 
-
+  
     // odśwież podgląd kosztu po pobraniu kursów
     if (typeof updateConversionPreview === "function") updateConversionPreview();
 
