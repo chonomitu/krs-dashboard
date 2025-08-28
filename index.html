@@ -240,6 +240,24 @@ async function fetchKRSPool() {
     const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" });
     const kursData = await kursRes.json();
 
+
+    const prefer = kursData?.prefer || "viaUSDC";
+    const wethVia = Number(kursData?.WETH_viaUSDC) || 0;
+    const wethDirect = Number(kursData?.WETH) || 0;
+
+    // to będzie używane do przeliczeń i podglądu kupna
+    window.krsEthPrice = (prefer === "viaUSDC" && wethVia > 0) ? wethVia : wethDirect;
+
+    // wyświetlanie na górze
+    document.getElementById("WETH").textContent =
+      `${fmt(window.krsEthPrice, 8)} ETH` + (prefer === "viaUSDC" ? " (via USDC)" : " (direct)");
+
+    // alert o rozjeździe (z backendu)
+    const diff = Number(kursData?.diff_pct) || 0;
+    document.getElementById("alertBox").style.display = diff > 0.05 ? "block" : "none";
+
+
+
     if (!kursData.pool) {
       throw new Error("Brak danych o puli (pool) w kursy.json");
     }
