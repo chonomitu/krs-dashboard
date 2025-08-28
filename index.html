@@ -458,11 +458,14 @@ async function buyKRS() {
 async function fetchKursy() {
   try {
     // dane z Twojego JSON-a – dodane bust cache
-    const kursRes = await fetch(`https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=${Date.now()}`, { cache: "no-cache" });
+    const kursRes = await fetch("https://raw.githubusercontent.com/chonomitu/krs-monitor/main/kursy.json?t=" + Date.now(), { cache: "no-store" }
+  );
+
     const kursData = await kursRes.json();
 
     // zapisz ceny do window
-    window.krsEthPrice = Number(kursData.WETH); // ETH za 1 KRS
+    window.krsEthPrice = NaN; // policzymy zaraz przez USDC/ETH
+
     window.krsUsdPrice = Number(kursData.USDC); // USD za 1 KRS
 
     console.log("kursData.WETH =", kursData.WETH);
@@ -476,9 +479,19 @@ async function fetchKursy() {
     const ethData = await ethRes.json();
 
     const ethPln = Number(ethData?.ethereum?.pln);
-    const ethUsd = Number(ethData?.ethereum?.usd);
+    // const ethUsd = Number(ethData?.ethereum?.usd);
     window.ethPln = (Number.isFinite(ethPln) && ethPln > 0) ? ethPln : NaN;
     window.usdPln = (Number.isFinite(ethPln) && Number.isFinite(ethUsd) && ethUsd > 0) ? (ethPln / ethUsd) : 4.0;
+
+
+    // dociągnij ETH/USD i policz ETH/KRS = (USDC/KRS) / (ETH/USD)
+    const ethUsdRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", { cache: "no-store" } );
+    const ethUsd = Number((await ethUsdRes.json())?.ethereum?.usd);
+    if (Number.isFinite(ethUsd) && Number(kursData.USDC) > 0) {
+      window.krsEthPrice = Number(kursData.USDC) / ethUsd; // **ETH za 1 KRS**
+    }
+
+
 
     // odśwież podgląd kosztu po pobraniu kursów
     if (typeof updateConversionPreview === "function") updateConversionPreview();
