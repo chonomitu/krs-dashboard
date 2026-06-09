@@ -678,12 +678,20 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      // Poczekaj chwilę po przełączeniu sieci (Trust Wallet potrzebuje)
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Dodaj token
       const success = await ethereum.request({
         method: 'wallet_watchAsset',
         params: {
           type: 'ERC20',
-          options: KRS_TOKEN
+          options: {
+            address: KRS_TOKEN.address,
+            symbol: KRS_TOKEN.symbol,
+            decimals: KRS_TOKEN.decimals,
+            image: KRS_TOKEN.image
+          }
         }
       });
 
@@ -693,8 +701,14 @@ window.addEventListener("DOMContentLoaded", () => {
         alert("❌ Użytkownik anulował dodanie tokena.");
       }
     } catch (error) {
-      console.error("⛔ Błąd:", error);
-      alert("⚠️ Nie udało się dodać tokena. Sprawdź konsolę.");
+      console.error("⛔ Błąd dodawania tokena:", error);
+      console.error("⛔ Szczegóły:", JSON.stringify(error, null, 2));
+
+      // Pokaż szczegóły błędu
+      let errorMsg = error.message || 'Nieznany błąd';
+      if (error.code) errorMsg += ` (kod: ${error.code})`;
+
+      alert(`⚠️ Nie udało się dodać tokena.\n\nBłąd: ${errorMsg}\n\nMożesz dodać ręcznie:\n1. Portfel → Dodaj token\n2. Adres: ${KRS_TOKEN.address}\n3. Symbol: KRS\n4. Decimals: 18`);
     }
   }
   </script>
