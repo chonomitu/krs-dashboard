@@ -681,15 +681,16 @@ window.addEventListener("DOMContentLoaded", () => {
       // Poczekaj chwilę po przełączeniu sieci (Trust Wallet potrzebuje)
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Dodaj token (bez image - Trust Wallet ma z tym problem)
+      // Dodaj token - Trust Wallet format
+      console.log('Próba dodania tokena:', KRS_TOKEN.address);
       const success = await ethereum.request({
         method: 'wallet_watchAsset',
         params: {
           type: 'ERC20',
           options: {
             address: KRS_TOKEN.address,
-            symbol: KRS_TOKEN.symbol,
-            decimals: KRS_TOKEN.decimals
+            symbol: 'KRS',
+            decimals: '18'
           }
         }
       });
