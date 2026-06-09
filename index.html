@@ -229,7 +229,7 @@ function updateConversionPreview() {
     <p><strong>Kontrakt KRS:</strong><br><code id="krsAddress">0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070</code></p>
     <button onclick="copyKRSAddress()">📋 Kopiuj adres</button>
     <br><br>
-    <button onclick="addTokenToWallet()">➕ Dodaj KRS do portfela (Arbitrum)</button>
+    <button onclick="addTokenToWallet()">📋 Kopiuj adres KRS (Arbitrum)</button>
   </div>
   <script>
     const DEBUG = false;
@@ -580,136 +580,31 @@ window.addEventListener("DOMContentLoaded", () => {
   </script>
 
   <script>
-  const ARBITRUM_CHAIN_ID = '0xa4b1'; // 42161 w hex
-  const KRS_TOKEN = {
-    address: '0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070',
-    symbol: 'KRS',
-    decimals: 18,
-    image: 'https://kyrson.pl/static/img/krs-icon.png'
-  };
+  const KRS_TOKEN_ADDRESS = '0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070';
 
-  // Wykryj czy to urządzenie mobilne
-  function isMobile() {
-    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  }
+  function addTokenToWallet() {
+    // Pokaż instrukcję - Trust Wallet nie wspiera wallet_watchAsset poprawnie
+    const instructions = `📋 Jak dodać KRS do portfela (Arbitrum One):
 
-  // Przełącz na Arbitrum
-  async function switchToArbitrum() {
-    try {
-      await ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: ARBITRUM_CHAIN_ID }]
-      });
-      return true;
-    } catch (switchError) {
-      // Sieć nie istnieje - dodaj ją
-      if (switchError.code === 4902) {
-        try {
-          await ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: ARBITRUM_CHAIN_ID,
-              chainName: 'Arbitrum One',
-              nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
-              rpcUrls: ['https://arb1.arbitrum.io/rpc'],
-              blockExplorerUrls: ['https://arbiscan.io']
-            }]
-          });
-          return true;
-        } catch (addError) {
-          console.error('Błąd dodawania sieci Arbitrum:', addError);
-          return false;
-        }
-      }
-      console.error('Błąd przełączania sieci:', switchError);
-      return false;
-    }
-  }
+1. Otwórz Trust Wallet / MetaMask
+2. Upewnij się że jesteś na sieci ARBITRUM ONE
+3. Kliknij "+" lub "Import Token" / "Dodaj token"
+4. Wklej adres kontraktu:
 
-  async function addTokenToWallet() {
-    // Na mobile - użyj deep linków
-    if (isMobile()) {
-      // Trust Wallet deep link do dodania tokena na Arbitrum
-      const trustWalletLink = `https://link.trustwallet.com/add_asset?asset=c42161_t${KRS_TOKEN.address}`;
+${KRS_TOKEN_ADDRESS}
 
-      // MetaMask mobile deep link
-      const metamaskLink = `https://metamask.app.link/token/${KRS_TOKEN.address}@42161`;
+5. Symbol: KRS
+6. Decimals: 18
+7. Zapisz
 
-      // Pokaż wybór portfela
-      const choice = confirm(
-        "📱 Wybierz portfel:\n\n" +
-        "OK = Trust Wallet\n" +
-        "Anuluj = MetaMask Mobile\n\n" +
-        "(Token KRS zostanie dodany na sieci Arbitrum)"
-      );
+Adres został skopiowany do schowka!`;
 
-      if (choice) {
-        window.location.href = trustWalletLink;
-      } else {
-        window.location.href = metamaskLink;
-      }
-      return;
-    }
-
-    // Desktop - klasyczne MetaMask API
-    if (!window.ethereum || !window.ethereum.request) {
-      alert("❌ MetaMask nie jest zainstalowany.\n\nNa telefonie użyj przeglądarki wbudowanej w Trust Wallet lub MetaMask.");
-      return;
-    }
-
-    // Sprawdź aktualną sieć
-    try {
-      const chainId = await ethereum.request({ method: 'eth_chainId' });
-
-      // Jeśli nie na Arbitrum - przełącz
-      if (chainId !== ARBITRUM_CHAIN_ID) {
-        const confirmed = confirm(
-          "⚠️ Jesteś na innej sieci!\n\n" +
-          "Token KRS istnieje tylko na Arbitrum One.\n" +
-          "Czy przełączyć na Arbitrum?"
-        );
-
-        if (!confirmed) return;
-
-        const switched = await switchToArbitrum();
-        if (!switched) {
-          alert("❌ Nie udało się przełączyć na Arbitrum.");
-          return;
-        }
-      }
-
-      // Poczekaj chwilę po przełączeniu sieci (Trust Wallet potrzebuje)
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Dodaj token - Trust Wallet format
-      console.log('Próba dodania tokena:', KRS_TOKEN.address);
-      const success = await ethereum.request({
-        method: 'wallet_watchAsset',
-        params: {
-          type: 'ERC20',
-          options: {
-            address: KRS_TOKEN.address,
-            symbol: 'KRS',
-            decimals: '18'
-          }
-        }
-      });
-
-      if (success) {
-        alert("✅ Token KRS został dodany do portfela na sieci Arbitrum!");
-      } else {
-        alert("❌ Użytkownik anulował dodanie tokena.");
-      }
-    } catch (error) {
-      console.error("⛔ Błąd dodawania tokena:", error);
-      console.error("⛔ Szczegóły:", JSON.stringify(error, null, 2));
-
-      // Pokaż szczegóły błędu
-      let errorMsg = error.message || 'Nieznany błąd';
-      if (error.code) errorMsg += ` (kod: ${error.code})`;
-
-      alert(`⚠️ Nie udało się dodać tokena.\n\nBłąd: ${errorMsg}\n\nMożesz dodać ręcznie:\n1. Portfel → Dodaj token\n2. Adres: ${KRS_TOKEN.address}\n3. Symbol: KRS\n4. Decimals: 18`);
-    }
+    // Kopiuj adres do schowka
+    navigator.clipboard.writeText(KRS_TOKEN_ADDRESS).then(() => {
+      alert(instructions);
+    }).catch(() => {
+      alert(instructions);
+    });
   }
   </script>
 
