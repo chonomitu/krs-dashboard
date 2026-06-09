@@ -229,7 +229,7 @@ function updateConversionPreview() {
     <p><strong>Kontrakt KRS:</strong><br><code id="krsAddress">0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070</code></p>
     <button onclick="copyKRSAddress()">📋 Kopiuj adres</button>
     <br><br>
-    <button onclick="addTokenToWallet()">📋 Kopiuj adres KRS (Arbitrum)</button>
+    <button onclick="addTokenToWallet()">➕ Dodaj KRS do portfela</button>
   </div>
   <script>
     const DEBUG = false;
@@ -581,14 +581,22 @@ window.addEventListener("DOMContentLoaded", () => {
 
   <script>
   const KRS_TOKEN_ADDRESS = '0x521e58970fBa0AEAF6DC9C2e994ec9e9CD71A070';
+  const ARBITRUM_CHAIN_ID = '0xa4b1'; // 42161
 
-  function addTokenToWallet() {
-    // Pokaż instrukcję - Trust Wallet nie wspiera wallet_watchAsset poprawnie
+  function isMobile() {
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  }
+
+  function isMetaMask() {
+    return window.ethereum && window.ethereum.isMetaMask && !window.ethereum.isTrust;
+  }
+
+  function showManualInstructions() {
     const instructions = `📋 Jak dodać KRS do portfela (Arbitrum One):
 
-1. Otwórz Trust Wallet / MetaMask
-2. Upewnij się że jesteś na sieci ARBITRUM ONE
-3. Kliknij "+" lub "Import Token" / "Dodaj token"
+1. Otwórz portfel
+2. Przełącz na sieć ARBITRUM ONE
+3. Kliknij "+" lub "Import Token"
 4. Wklej adres kontraktu:
 
 ${KRS_TOKEN_ADDRESS}
@@ -599,12 +607,85 @@ ${KRS_TOKEN_ADDRESS}
 
 Adres został skopiowany do schowka!`;
 
-    // Kopiuj adres do schowka
-    navigator.clipboard.writeText(KRS_TOKEN_ADDRESS).then(() => {
-      alert(instructions);
-    }).catch(() => {
-      alert(instructions);
-    });
+    navigator.clipboard.writeText(KRS_TOKEN_ADDRESS).catch(() => {});
+    alert(instructions);
+  }
+
+  async function addTokenToWallet() {
+    // Mobile - deep links
+    if (isMobile()) {
+      const choice = confirm(
+        "📱 Wybierz portfel:\n\n" +
+        "OK = Trust Wallet\n" +
+        "Anuluj = MetaMask Mobile"
+      );
+      if (choice) {
+        window.location.href = `https://link.trustwallet.com/add_asset?asset=c42161_t${KRS_TOKEN_ADDRESS}`;
+      } else {
+        window.location.href = `https://metamask.app.link/token/${KRS_TOKEN_ADDRESS}@42161`;
+      }
+      return;
+    }
+
+    // Brak portfela
+    if (!window.ethereum) {
+      showManualInstructions();
+      return;
+    }
+
+    // MetaMask - automatycznie
+    if (isMetaMask()) {
+      try {
+        // Sprawdź/przełącz sieć
+        const chainId = await ethereum.request({ method: 'eth_chainId' });
+        if (chainId !== ARBITRUM_CHAIN_ID) {
+          try {
+            await ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: ARBITRUM_CHAIN_ID }]
+            });
+          } catch (e) {
+            if (e.code === 4902) {
+              await ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: ARBITRUM_CHAIN_ID,
+                  chainName: 'Arbitrum One',
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  rpcUrls: ['https://arb1.arbitrum.io/rpc'],
+                  blockExplorerUrls: ['https://arbiscan.io']
+                }]
+              });
+            }
+          }
+        }
+
+        // Dodaj token
+        const success = await ethereum.request({
+          method: 'wallet_watchAsset',
+          params: {
+            type: 'ERC20',
+            options: {
+              address: KRS_TOKEN_ADDRESS,
+              symbol: 'KRS',
+              decimals: 18,
+              image: 'https://kyrson.pl/static/img/krs-icon.png'
+            }
+          }
+        });
+
+        if (success) {
+          alert("✅ Token KRS dodany do MetaMask!");
+        }
+      } catch (error) {
+        console.error("Błąd MetaMask:", error);
+        showManualInstructions();
+      }
+      return;
+    }
+
+    // Trust Wallet / inne - instrukcja
+    showManualInstructions();
   }
   </script>
 
