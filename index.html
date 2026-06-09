@@ -611,14 +611,25 @@ Symbol: KRS | Decimals: 18
 
   async function tryAutoAdd() {
     try {
-      // Przełącz na Arbitrum
+      console.log("1. Sprawdzam sieć...");
+
+      // Sprawdź sieć
       const chainId = await ethereum.request({ method: 'eth_chainId' });
+      console.log("Aktualna sieć:", chainId, "Wymagana:", ARBITRUM_CHAIN_ID);
+
+      // Przełącz na Arbitrum jeśli trzeba
       if (chainId !== ARBITRUM_CHAIN_ID) {
-        await ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: ARBITRUM_CHAIN_ID }]
-        }).catch(async (e) => {
-          if (e.code === 4902) {
+        console.log("2. Przełączam na Arbitrum...");
+        try {
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: ARBITRUM_CHAIN_ID }]
+          });
+          console.log("Przełączono na Arbitrum");
+        } catch (switchError) {
+          console.log("Switch error:", switchError.code, switchError.message);
+          if (switchError.code === 4902) {
+            console.log("Dodaję sieć Arbitrum...");
             await ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [{
@@ -629,9 +640,13 @@ Symbol: KRS | Decimals: 18
                 blockExplorerUrls: ['https://arbiscan.io']
               }]
             });
+          } else {
+            throw switchError;
           }
-        });
+        }
       }
+
+      console.log("3. Dodaję token...");
 
       // Dodaj token
       const success = await ethereum.request({
@@ -646,12 +661,14 @@ Symbol: KRS | Decimals: 18
         }
       });
 
+      console.log("Wynik dodawania tokena:", success);
+
       if (success) {
         alert("✅ Token KRS dodany do portfela!");
         return true;
       }
     } catch (error) {
-      console.error("Auto-add failed:", error);
+      console.error("❌ Auto-add failed:", error.code, error.message, error);
     }
     return false;
   }
@@ -667,15 +684,35 @@ Symbol: KRS | Decimals: 18
     }
 
     const wallet = getWalletType();
-    console.log("Wykryty portfel:", wallet);
+
+    // Debug info
+    const debugInfo = `Wykryty portfel: ${wallet}
+ethereum: ${!!window.ethereum}
+isMetaMask: ${window.ethereum?.isMetaMask}
+isTrust: ${window.ethereum?.isTrust}
+providers: ${window.ethereum?.providers?.length || 0}`;
+
+    console.log(debugInfo);
 
     // Brak portfela
     if (wallet === 'none') {
+      alert("❌ Nie wykryto portfela.\n\n" + debugInfo);
       showManualInstructions();
       return;
     }
 
-    // Spróbuj automatycznie (działa w MetaMask, czasem w Trust)
+    // Jeśli są multiple providers (oba portfele), pozwól wybrać
+    if (window.ethereum?.providers?.length > 1) {
+      const useMetaMask = confirm("Wykryto wiele portfeli.\n\nOK = MetaMask\nAnuluj = Trust Wallet");
+      const selectedProvider = window.ethereum.providers.find(p =>
+        useMetaMask ? p.isMetaMask && !p.isTrust : p.isTrust
+      );
+      if (selectedProvider) {
+        window.ethereum = selectedProvider;
+      }
+    }
+
+    // Spróbuj automatycznie
     const autoWorked = await tryAutoAdd();
 
     // Jeśli nie zadziałało - pokaż instrukcję
