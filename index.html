@@ -587,105 +587,101 @@ window.addEventListener("DOMContentLoaded", () => {
     return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   }
 
-  function isMetaMask() {
-    return window.ethereum && window.ethereum.isMetaMask && !window.ethereum.isTrust;
+  function getWalletType() {
+    if (!window.ethereum) return 'none';
+    if (window.ethereum.isTrust) return 'trust';
+    if (window.ethereum.isMetaMask) return 'metamask';
+    return 'other';
   }
 
   function showManualInstructions() {
-    const instructions = `📋 Jak dodać KRS do portfela (Arbitrum One):
+    navigator.clipboard.writeText(KRS_TOKEN_ADDRESS).catch(() => {});
+    alert(`📋 Jak dodać KRS do portfela:
 
-1. Otwórz portfel
-2. Przełącz na sieć ARBITRUM ONE
-3. Kliknij "+" lub "Import Token"
-4. Wklej adres kontraktu:
+1. Przełącz na sieć ARBITRUM ONE
+2. Kliknij "Import Token" lub "+"
+3. Wklej adres:
 
 ${KRS_TOKEN_ADDRESS}
 
-5. Symbol: KRS
-6. Decimals: 18
-7. Zapisz
+Symbol: KRS | Decimals: 18
 
-Adres został skopiowany do schowka!`;
+✅ Adres skopiowany do schowka!`);
+  }
 
-    navigator.clipboard.writeText(KRS_TOKEN_ADDRESS).catch(() => {});
-    alert(instructions);
+  async function tryAutoAdd() {
+    try {
+      // Przełącz na Arbitrum
+      const chainId = await ethereum.request({ method: 'eth_chainId' });
+      if (chainId !== ARBITRUM_CHAIN_ID) {
+        await ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: ARBITRUM_CHAIN_ID }]
+        }).catch(async (e) => {
+          if (e.code === 4902) {
+            await ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: ARBITRUM_CHAIN_ID,
+                chainName: 'Arbitrum One',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://arb1.arbitrum.io/rpc'],
+                blockExplorerUrls: ['https://arbiscan.io']
+              }]
+            });
+          }
+        });
+      }
+
+      // Dodaj token
+      const success = await ethereum.request({
+        method: 'wallet_watchAsset',
+        params: {
+          type: 'ERC20',
+          options: {
+            address: KRS_TOKEN_ADDRESS,
+            symbol: 'KRS',
+            decimals: 18
+          }
+        }
+      });
+
+      if (success) {
+        alert("✅ Token KRS dodany do portfela!");
+        return true;
+      }
+    } catch (error) {
+      console.error("Auto-add failed:", error);
+    }
+    return false;
   }
 
   async function addTokenToWallet() {
     // Mobile - deep links
     if (isMobile()) {
-      const choice = confirm(
-        "📱 Wybierz portfel:\n\n" +
-        "OK = Trust Wallet\n" +
-        "Anuluj = MetaMask Mobile"
-      );
-      if (choice) {
-        window.location.href = `https://link.trustwallet.com/add_asset?asset=c42161_t${KRS_TOKEN_ADDRESS}`;
-      } else {
-        window.location.href = `https://metamask.app.link/token/${KRS_TOKEN_ADDRESS}@42161`;
-      }
+      const choice = confirm("📱 Wybierz portfel:\n\nOK = Trust Wallet\nAnuluj = MetaMask");
+      window.location.href = choice
+        ? `https://link.trustwallet.com/add_asset?asset=c42161_t${KRS_TOKEN_ADDRESS}`
+        : `https://metamask.app.link/token/${KRS_TOKEN_ADDRESS}@42161`;
       return;
     }
 
+    const wallet = getWalletType();
+    console.log("Wykryty portfel:", wallet);
+
     // Brak portfela
-    if (!window.ethereum) {
+    if (wallet === 'none') {
       showManualInstructions();
       return;
     }
 
-    // MetaMask - automatycznie
-    if (isMetaMask()) {
-      try {
-        // Sprawdź/przełącz sieć
-        const chainId = await ethereum.request({ method: 'eth_chainId' });
-        if (chainId !== ARBITRUM_CHAIN_ID) {
-          try {
-            await ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: ARBITRUM_CHAIN_ID }]
-            });
-          } catch (e) {
-            if (e.code === 4902) {
-              await ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: ARBITRUM_CHAIN_ID,
-                  chainName: 'Arbitrum One',
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                  rpcUrls: ['https://arb1.arbitrum.io/rpc'],
-                  blockExplorerUrls: ['https://arbiscan.io']
-                }]
-              });
-            }
-          }
-        }
+    // Spróbuj automatycznie (działa w MetaMask, czasem w Trust)
+    const autoWorked = await tryAutoAdd();
 
-        // Dodaj token
-        const success = await ethereum.request({
-          method: 'wallet_watchAsset',
-          params: {
-            type: 'ERC20',
-            options: {
-              address: KRS_TOKEN_ADDRESS,
-              symbol: 'KRS',
-              decimals: 18,
-              image: 'https://kyrson.pl/static/img/krs-icon.png'
-            }
-          }
-        });
-
-        if (success) {
-          alert("✅ Token KRS dodany do MetaMask!");
-        }
-      } catch (error) {
-        console.error("Błąd MetaMask:", error);
-        showManualInstructions();
-      }
-      return;
+    // Jeśli nie zadziałało - pokaż instrukcję
+    if (!autoWorked) {
+      showManualInstructions();
     }
-
-    // Trust Wallet / inne - instrukcja
-    showManualInstructions();
   }
   </script>
 
